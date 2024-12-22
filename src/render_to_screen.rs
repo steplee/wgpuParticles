@@ -2,7 +2,7 @@ use winit::{
     application::ApplicationHandler, dpi::LogicalSize, event::{Event, WindowEvent}, event_loop::{ControlFlow, EventLoop}, window::Window
 };
 use wgpu::{
-    include_wgsl, util::{BufferInitDescriptor, DeviceExt}, Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer, BufferAsyncError, BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, ColorTargetState, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, FragmentState, MapMode, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPipeline, RenderPipelineDescriptor, ShaderStages, VertexState
+    include_wgsl, util::{BufferInitDescriptor, DeviceExt}, Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer, BufferAsyncError, BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, ColorTargetState, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, FragmentState, MapMode, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PushConstantRange, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderStages, VertexState
 };
 
 use crate::setup::{to_bind_group_entries, WebGpuCtx};
@@ -40,7 +40,7 @@ pub struct RenderToScreen {
 
 impl RenderToScreen {
 
-    pub fn new(wctx: WebGpuCtx, w:u32, h:u32, framebuffers: &Vec<Buffer>) -> Self {
+    pub fn new(wctx: &WebGpuCtx, w:u32, h:u32, param_buffer: &Buffer, framebuffers: &Vec<Buffer>) -> Self {
         let device = &wctx.device;
         let queue = &wctx.queue;
 
@@ -51,6 +51,16 @@ impl RenderToScreen {
             entries: &[
                 BindGroupLayoutEntry {
                     binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(0),
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
                     visibility: ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Storage { read_only: true },
@@ -119,6 +129,7 @@ impl RenderToScreen {
             // particle_buffers[0]. And the opposite for odd iterations.
             bgs.push(device.create_bind_group(&BindGroupDescriptor {
                 entries: &to_bind_group_entries(&[
+                    param_buffer,
                     &framebuffers[(i + 0) % 2],
                 ]),
                 label: Some(&format!("ParticleBg{}", i)),
@@ -132,6 +143,25 @@ impl RenderToScreen {
         }
     }
 
-    pub fn show_storage_buffer(&mut self, buf: &Buffer) {
+    pub fn show_storage_buffer(&mut self, color_tex_view: &wgpu::TextureView, wctx: &WebGpuCtx, buf: &Buffer) {
+        let mut ce = wctx.device.create_command_encoder(&Default::default());
+        let mut rpass = ce.begin_render_pass(&RenderPassDescriptor{
+            color_attachments: &[Some(RenderPassColorAttachment{
+                view: &color_tex_view,
+                resolve_target: None,
+                ops: Default::default()
+            })],
+            depth_stencil_attachment: None,
+            label: Some("showStorageBuffer"),
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+
+        rpass.set_pipeline(&self.pipeline);
+        rpass.set_bind_group(0, &self.bgs[0], &[]);
+        rpass.draw(0..6, 0..1);
+        drop(rpass);
+
+        wctx.queue.submit([ce.finish()]);
     }
 }

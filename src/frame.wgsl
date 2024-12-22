@@ -162,13 +162,14 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 		let p = particlesIn[items[j].i];
 		let d = length(p.p.xy - uv);
 		// color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * exp(-d*6550.);
-		color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * exp(-d*3650.);
+		color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * exp(-d*4650.);
 	}
 
 
 	color = vec4f(color.rgb/(.000001+color.a), color.a);
 	color += frameIn[py*fw+px] * .9;
 
+	// frameOut[py*fw+px] = vec4f(f32(px)*.001,f32(py)*.001,0.,1.);
 	frameOut[py*fw+px] = color;
 
 	let ntop = vec4u(

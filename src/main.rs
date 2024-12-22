@@ -481,17 +481,18 @@ fn read_frame_buffer(dst: &mut[u8], scene: &Scene, idx: usize) {
 }
 
 struct App {
-    scene: Scene,
+    scene: Option<Scene>,
     window: Option<Arc<Window>>,
     surface: Option<wgpu::Surface<'static>>,
     config: Option<SurfaceConfiguration>,
+    rts: Option<RenderToScreen>,
 
     frame_cntr: usize,
 }
 
 impl App {
     fn step(&mut self, render: bool, write_render: bool) {
-        let scene = &self.scene;
+        let scene = &self.scene.as_ref().unwrap();
         let device = &scene.wctx.device;
         let queue = &scene.wctx.queue;
 
@@ -548,27 +549,14 @@ impl App {
             } else {
                 let stex = self.acquire();
                 let view = stex.texture.create_view(&TextureViewDescriptor {
-                    format: Some(self.config.as_ref().unwrap().view_formats[0]),
+                    // format: Some(self.config.as_ref().unwrap().view_formats[0]),
+                    format: Some(self.config.as_ref().unwrap().format),
                     ..wgpu::TextureViewDescriptor::default()
                 });
-                let color_attachments = [Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        // Not clearing here in order to test wgpu's zero texture initialization on a surface texture.
-                        // Users should avoid loading uninitialized memory since this can cause additional overhead.
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })];
-                let render_pass_descriptor = wgpu::RenderPassDescriptor {
-                    label: None,
-                    color_attachments: &color_attachments,
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                };
 
+                let id = (self.frame_cntr + 1) % 2;
+                self.rts.as_mut().unwrap().show_storage_buffer(&view, &scene.wctx, &scene.frame_buffers[id]);
+                stex.present();
             }
         }
 
@@ -576,7 +564,7 @@ impl App {
     }
 
     /// Acquire the next surface texture.
-    fn acquire(&mut self) -> wgpu::SurfaceTexture {
+    fn acquire(&self) -> wgpu::SurfaceTexture {
         let surface = self.surface.as_ref().unwrap();
 
         match surface.get_current_texture() {
@@ -593,7 +581,7 @@ impl App {
                 // If OutOfMemory happens, reconfiguring may not help, but we might as well try
                 | wgpu::SurfaceError::OutOfMemory,
             ) => {
-                surface.configure(&self.scene.wctx.device, &self.config.as_ref().unwrap());
+                surface.configure(&self.scene.as_ref().unwrap().wctx.device, &self.config.as_ref().unwrap());
                 surface
                     .get_current_texture()
                     .expect("Failed to acquire next surface texture!")
@@ -604,23 +592,37 @@ impl App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+
+        // let mut scene = go();
+        self.scene = Some(go());
+        let scene = self.scene.as_mut().unwrap();
+
         let attr = winit::window::Window::default_attributes()
             .with_title("Shader")
             .with_inner_size(LogicalSize::new(FrameW as u32, FrameH as u32));
         self.window = Some(Arc::new(event_loop.create_window(attr).unwrap()));
 
         // How did the clone fix the lifetime issues?
-        self.surface = Some(self.scene.wctx.instance.create_surface(self.window.as_ref().unwrap().clone()).unwrap());
+        self.surface = Some(scene.wctx.instance.create_surface(self.window.as_ref().unwrap().clone()).unwrap());
         let surface = self.surface.as_ref().unwrap();
-        let mut config = surface.get_default_config(&self.scene.wctx.adapter, FrameW as u32, FrameH as u32).unwrap();
+        let mut config = surface.get_default_config(&scene.wctx.adapter, FrameW as u32, FrameH as u32).unwrap();
+        config.format = wgpu::TextureFormat::Bgra8Unorm;
         println!("surface config: {:?}", config);
 
-        surface.configure(&self.scene.wctx.device, &config);
+        surface.configure(&scene.wctx.device, &config);
         self.config = Some(config);
+        println!("config: {:?}", self.config.as_ref().unwrap());
+
+        self.rts = Some(RenderToScreen::new(&scene.wctx, FrameW as u32, FrameH as u32, &scene.sim_ubo, &scene.frame_buffers));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         // println!("event");
+
+        if let WindowEvent::RedrawRequested = event {
+            self.step(true,false);
+            self.window.as_ref().unwrap().request_redraw();
+        }
     }
 }
 
@@ -629,14 +631,13 @@ impl ApplicationHandler for App {
 fn main() {
     env_logger::init();
 
-    let mut scene = go();
 
-    let mut app = App { scene, window: None, surface: None, config: None, frame_cntr: 0};
+    let mut app = App { scene: None, window: None, surface: None, config: None, rts: None, frame_cntr: 0};
 
     let event_loop = EventLoop::new().unwrap();
 
-    // event_loop.set_control_flow(ControlFlow::Poll); // loop fast, don't wait for IO
-    event_loop.set_control_flow(ControlFlow::Wait); // wait for IO.
+    event_loop.set_control_flow(ControlFlow::Poll); // loop fast, don't wait for IO
+    // event_loop.set_control_flow(ControlFlow::Wait); // wait for IO.
     event_loop.run_app(&mut app).unwrap();
 
     /*
