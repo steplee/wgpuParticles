@@ -26,6 +26,8 @@ const FrameWorkGroupSize: u64 = 16;
 const FrameW: u64 = 1280;
 const FrameH: u64 = 720;
 
+
+
 // https://webgpufundamentals.org/webgpu/lessons/resources/wgsl-offset-computer.html#x=5d00000100e100000000000000003d888b0237284ce7dce121b384fd72bd9a1ff901e6abc5860a8aab2b748a2f3fbc2dca897cd5cc036480d1f4e50913dd8a6d45a2b935e6a3e3540a7b4907cc3a21aa8b1b0bef4daf9ebe127e4f6eda4c885b12cea0b7c858107e112a5eaaec2f3636dd194dd383565b3dbd03913941e8be64550fccc2539215021287c596c9204174b45ea9bba988d9fef564aa00
 #[derive(Clone, Copy, Debug)]
 struct Particle {
@@ -53,11 +55,20 @@ struct SimParams {
     h: u32,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct FrameState {
+	top: [u32; 4], // tracking info
+	rstate: u32, // prng state
+}
+
 unsafe impl Zeroable for Particle {}
 unsafe impl Pod for Particle {}
 
 unsafe impl Zeroable for SimParams {}
 unsafe impl Pod for SimParams {}
+
+unsafe impl Zeroable for FrameState {}
+unsafe impl Pod for FrameState {}
 
 struct Scene {
     wctx: WebGpuCtx,
@@ -70,6 +81,7 @@ struct Scene {
 
     frame_bgs: Vec<BindGroup>,
     frame_buffers: Vec<Buffer>,
+    frame_state_buffers: Vec<Buffer>,
     frame_map_buffer: Buffer,
 
     sim_pipeline: ComputePipeline,
@@ -321,6 +333,30 @@ fn go() -> Scene {
                 },
                 count: None,
             },
+            BindGroupLayoutEntry {
+                binding: 4,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: BufferSize::new(
+                        FrameW * FrameH * 1 * size_of::<FrameState>() as u64,
+                    ),
+                },
+                count: None,
+            },
+            BindGroupLayoutEntry {
+                binding: 5,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: BufferSize::new(
+                        FrameW * FrameH * 1 * size_of::<FrameState>() as u64,
+                    ),
+                },
+                count: None,
+            },
         ],
         label: Some("FrameBGL"),
     });
@@ -340,14 +376,26 @@ fn go() -> Scene {
         cache: None,
     });
 
-    let ini_frame = vec![0.0_f32; (FrameW * FrameH * 4) as usize];
+    let npix = FrameW * FrameH;
+    let ini_frame = vec![0.0_f32; (npix * 4) as usize];
+
+    // let ini_frame_state = vec![ini_frame_state; (npix * 4) as usize];
+    let ini_frame_state = (0..(npix as u32)).map(|i| FrameState { top: [0,0,0,0], rstate: i }).collect::<Vec<_>>();
+
     let mut frame_buffers = vec![];
+    let mut frame_state_buffers = vec![];
     let mut frame_bgs = vec![];
 
     for i in 0..2 {
         frame_buffers.push(device.create_buffer_init(&BufferInitDescriptor {
             label: Some(&format!("FrameBuf{}", i)),
             contents: bytemuck::cast_slice(&ini_frame),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+        }));
+
+        frame_state_buffers.push(device.create_buffer_init(&BufferInitDescriptor {
+            label: Some(&format!("FrameStateBuf{}", i)),
+            contents: bytemuck::cast_slice(&ini_frame_state),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
         }));
     }
@@ -361,6 +409,8 @@ fn go() -> Scene {
                 &particle_buffers[(i + 1) % 2],
                 &frame_buffers[(i + 0) % 2],
                 &frame_buffers[(i + 1) % 2],
+                &frame_state_buffers[(i + 0) % 2],
+                &frame_state_buffers[(i + 1) % 2],
             ]),
             label: Some(&format!("FrameBg{}", i)),
             layout: &frame_bgl,
@@ -383,6 +433,7 @@ fn go() -> Scene {
         particle_buffers,
         frame_bgs,
         frame_buffers,
+        frame_state_buffers,
         frame_map_buffer,
         sim_pipeline,
         frame_pipeline,
@@ -514,11 +565,7 @@ fn main() {
     app.step(false);
     app.step(false);
     app.step(false);
-    app.step(true);
-    app.step(true);
-    app.step(true);
-    app.step(true);
-    app.step(true);
+    // app.step(true);
     app.step(true);
 
     println!("Hello, world!");

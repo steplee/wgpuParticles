@@ -75,3 +75,14 @@ fn get_random_acc(a: vec3f) -> vec3f {
 	let z = noise13(a + vec3f(42.2, -13.5, 22.23));
 	return vec3f(x,y,z) - .5;
 }
+
+
+// https://stackoverflow.com/questions/17035441/looking-for-decent-quality-prng-with-only-32-bits-of-state
+fn mulberry32(state: u32) -> vec2u {
+	let nstate = state + 0x6D2B79F5u;
+	
+    var z = (state ^ state >> 15) * (1 | state);
+    z ^= z + (z ^ z >> 7) * (61 | z);
+	z = z ^ z >> 14;
+	return vec2u(z, nstate);
+}

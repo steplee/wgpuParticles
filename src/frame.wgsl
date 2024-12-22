@@ -5,6 +5,15 @@
 @group(0) @binding(2) var<storage, read> frameIn: array<vec4f>;
 @group(0) @binding(3) var<storage, read_write> frameOut: array<vec4f>;
 
+@group(0) @binding(4) var<storage, read> frameStateIn: array<vec4f>;
+@group(0) @binding(5) var<storage, read_write> frameStateOut: array<vec4f>;
+
+struct FrameState {
+	top: vec4u, // tracking info
+	rstate: u32, // prng state
+}
+
+
 @compute
 @workgroup_size(16,16)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
@@ -43,7 +52,12 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
 	color = vec4f(color.rgb/(.000001+color.a), color.a);
 
-	color += frameIn[py*fw+px] * .9;
+	let a = mulberry32(px*4000+py);
+	let b = mulberry32(a.y);
+	let c = mulberry32(b.y);
+	color.r = f32(c.x % 255) / 255.;
+
+	// color += frameIn[py*fw+px] * .9;
 
 
 	frameOut[py*fw+px] = color;
