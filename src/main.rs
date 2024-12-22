@@ -5,16 +5,15 @@ use std::{
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::{
-    Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, Buffer, BufferAsyncError, BufferBindingType,
-    BufferDescriptor, BufferSize, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
-    ComputePipeline, ComputePipelineDescriptor, Device, MapMode, PipelineCompilationOptions,
-    PipelineLayoutDescriptor, Queue, ShaderStages,
-    util::{BufferInitDescriptor, DeviceExt},
+    util::{BufferInitDescriptor, DeviceExt}, Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer, BufferAsyncError, BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, MapMode, PipelineCompilationOptions, PipelineLayoutDescriptor, Queue, RenderPipeline, ShaderStages, SurfaceConfiguration, TextureViewDescriptor
 };
 
 mod setup;
-use setup::{WebGpuCtx, setup};
+use setup::{setup, to_bind_group_entries, WebGpuCtx};
+
+mod render_to_screen;
+use render_to_screen::{RenderToScreen};
+use winit::{application::ApplicationHandler, dpi::LogicalSize, event::WindowEvent, event_loop::{ActiveEventLoop, ControlFlow, EventLoop}, window::{Window, WindowId}};
 
 // const MaxParticlesSqrt: u64 = 256;
 const MaxParticlesSqrt: u64 = 256;
@@ -91,16 +90,7 @@ struct Scene {
     // frame_work_group_count: u32,
 }
 
-fn to_bind_group_entries<'a>(items: &[&'a Buffer]) -> Vec<BindGroupEntry<'a>> {
-    return items
-        .iter()
-        .enumerate()
-        .map(|(i, item)| BindGroupEntry {
-            binding: i as u32,
-            resource: (*item).as_entire_binding(),
-        })
-        .collect();
-}
+
 
 fn go() -> Scene {
     let wctx = setup();
@@ -492,6 +482,10 @@ fn read_frame_buffer(dst: &mut[u8], scene: &Scene, idx: usize) {
 
 struct App {
     scene: Scene,
+    window: Option<Arc<Window>>,
+    surface: Option<wgpu::Surface<'static>>,
+    config: Option<SurfaceConfiguration>,
+
     frame_cntr: usize,
 }
 
@@ -551,18 +545,101 @@ impl App {
                     fp.write(img.as_slice()).ok();
                     println!("wrote '/tmp/img.bin'");
                 }
+            } else {
+                let stex = self.acquire();
+                let view = stex.texture.create_view(&TextureViewDescriptor {
+                    format: Some(self.config.as_ref().unwrap().view_formats[0]),
+                    ..wgpu::TextureViewDescriptor::default()
+                });
+                let color_attachments = [Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        // Not clearing here in order to test wgpu's zero texture initialization on a surface texture.
+                        // Users should avoid loading uninitialized memory since this can cause additional overhead.
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })];
+                let render_pass_descriptor = wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &color_attachments,
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                };
+
             }
         }
 
         self.frame_cntr += 1;
     }
+
+    /// Acquire the next surface texture.
+    fn acquire(&mut self) -> wgpu::SurfaceTexture {
+        let surface = self.surface.as_ref().unwrap();
+
+        match surface.get_current_texture() {
+            Ok(frame) => frame,
+            // If we timed out, just try again
+            Err(wgpu::SurfaceError::Timeout) => surface
+                .get_current_texture()
+                .expect("Failed to acquire next surface texture!"),
+            Err(
+                // If the surface is outdated, or was lost, reconfigure it.
+                wgpu::SurfaceError::Outdated
+                | wgpu::SurfaceError::Lost
+                // | wgpu::SurfaceError::Other
+                // If OutOfMemory happens, reconfiguring may not help, but we might as well try
+                | wgpu::SurfaceError::OutOfMemory,
+            ) => {
+                surface.configure(&self.scene.wctx.device, &self.config.as_ref().unwrap());
+                surface
+                    .get_current_texture()
+                    .expect("Failed to acquire next surface texture!")
+            }
+        }
+    }
 }
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let attr = winit::window::Window::default_attributes()
+            .with_title("Shader")
+            .with_inner_size(LogicalSize::new(FrameW as u32, FrameH as u32));
+        self.window = Some(Arc::new(event_loop.create_window(attr).unwrap()));
+
+        // How did the clone fix the lifetime issues?
+        self.surface = Some(self.scene.wctx.instance.create_surface(self.window.as_ref().unwrap().clone()).unwrap());
+        let surface = self.surface.as_ref().unwrap();
+        let mut config = surface.get_default_config(&self.scene.wctx.adapter, FrameW as u32, FrameH as u32).unwrap();
+        println!("surface config: {:?}", config);
+
+        surface.configure(&self.scene.wctx.device, &config);
+        self.config = Some(config);
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        // println!("event");
+    }
+}
+
+
 
 fn main() {
     env_logger::init();
 
     let mut scene = go();
-    let mut app = App { scene, frame_cntr: 0};
+
+    let mut app = App { scene, window: None, surface: None, config: None, frame_cntr: 0};
+
+    let event_loop = EventLoop::new().unwrap();
+
+    // event_loop.set_control_flow(ControlFlow::Poll); // loop fast, don't wait for IO
+    event_loop.set_control_flow(ControlFlow::Wait); // wait for IO.
+    event_loop.run_app(&mut app).unwrap();
+
+    /*
     app.step(false, false);
     app.step(false,false);
     app.step(false,false);
@@ -574,6 +651,7 @@ fn main() {
     app.step(true,false);
     app.step(true,false);
     app.step(true,true);
+    */
 
     println!("Hello, world!");
 }

@@ -1,5 +1,5 @@
 use futures::executor::block_on;
-use wgpu::{Adapter, BindGroup, Buffer, ComputePipeline, Device, Queue, ShaderModuleDescriptor};
+use wgpu::{Adapter, BindGroup, BindGroupEntry, Buffer, ComputePipeline, Device, Queue, ShaderModuleDescriptor};
 
 pub struct WebGpuCtx {
     pub instance: wgpu::Instance,
@@ -51,6 +51,17 @@ pub fn setup() -> WebGpuCtx {
         device,
         queue,
     };
+}
+
+pub fn to_bind_group_entries<'a>(items: &[&'a Buffer]) -> Vec<BindGroupEntry<'a>> {
+    return items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| BindGroupEntry {
+            binding: i as u32,
+            resource: (*item).as_entire_binding(),
+        })
+        .collect();
 }
 
 /*
