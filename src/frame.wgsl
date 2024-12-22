@@ -142,6 +142,13 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 			pi = frameStateIn[neighbory*fw+neighborx].top.x;
 		}
 
+
+FIXME: This is not enough: must prune and sort every step
+		// skip if we already have.
+		for (var j = 0u; j < 4; j++) {
+			if (items[j].i == pi) {continue;}
+		}
+
 		let part = particlesIn[pi];
 
 		let d = length(part.p.xy - uv);
@@ -158,18 +165,33 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 		}
 	}
 
+	// Very unlikely we have > 1 particle near us (us being the pixel)
 	for (var j = 0u; j < 4; j++) {
 		let p = particlesIn[items[j].i];
 		let d = length(p.p.xy - uv);
-		// color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * exp(-d*6550.);
-		color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * exp(-d*4650.);
+		color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * exp(-d*5650.) * .5;
+	}
+
+	{
+		let p1 = particlesIn[items[0].i];
+		let d1 = length(p1.p.xy - uv);
+		let p2 = particlesIn[items[3].i];
+		let d2 = length(p2.p.xy - uv);
+
+		// let ll = cross(vec3(p1.p.xy, 1.), vec3(p2.p.xy, 1.));
+		// let l = cross(ll, vec3(0.,0.,1.));
+		// let d = abs(dot(l, vec3(uv - p1.p.xy,0.))) * 2.;
+		// color += vec4f(d, d,d, d);
+
+		color += vec4f(1.,0.,0.,1.) * exp(-d1 * 100.);
+		color += vec4f(0.,1.,0.,1.) * exp(-d2 * 100.);
 	}
 
 
 	color = vec4f(color.rgb/(.000001+color.a), color.a);
-	color += frameIn[py*fw+px] * .9;
+	color += frameIn[py*fw+px] * .1;
 
-	// frameOut[py*fw+px] = vec4f(f32(px)*.001,f32(py)*.001,0.,1.);
+	// frameOut[py*fw+px] = vec4f(sin(3.141*f32(px)),f32(py)*.001,0.,1.);
 	frameOut[py*fw+px] = color;
 
 	let ntop = vec4u(

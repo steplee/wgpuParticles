@@ -33,8 +33,8 @@ fn vs_main(@builtin(vertex_index) vid: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(vo: VertexOutput) -> @location(0) vec4f {
-	let fx = u32(vo.uv.x * f32(sim_params.frame_w) + .5);
-	let fy = u32(vo.uv.y * f32(sim_params.frame_h) + .5);
+	let fx = u32(vo.uv.x * f32(sim_params.frame_w-1) + .05);
+	let fy = u32(vo.uv.y * f32(sim_params.frame_h-1) + .05);
 	let c = frameIn[fy*sim_params.frame_w+fx];
 	return c;
 }
