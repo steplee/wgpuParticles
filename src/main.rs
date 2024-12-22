@@ -34,15 +34,15 @@ struct Particle {
     x: f32,
     y: f32,
     z: f32,
-    pad: f32,
+    _pad: f32,
     vx: f32,
     vy: f32,
     vz: f32,
     intensity: f32,
     size: f32,
-    pad2: f32,
-    pad3: f32,
-    pad4: f32,
+    _pad2: f32,
+    _pad3: f32,
+    _pad4: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -59,6 +59,7 @@ struct SimParams {
 struct FrameState {
 	top: [u32; 4], // tracking info
 	rstate: u32, // prng state
+    _pad: [u32; 3],
 }
 
 unsafe impl Zeroable for Particle {}
@@ -380,7 +381,7 @@ fn go() -> Scene {
     let ini_frame = vec![0.0_f32; (npix * 4) as usize];
 
     // let ini_frame_state = vec![ini_frame_state; (npix * 4) as usize];
-    let ini_frame_state = (0..(npix as u32)).map(|i| FrameState { top: [0,0,0,0], rstate: i }).collect::<Vec<_>>();
+    let ini_frame_state = (0..(npix as u32)).map(|i| FrameState { top: [0,0,0,0], rstate: i, _pad: [0,0,0] }).collect::<Vec<_>>();
 
     let mut frame_buffers = vec![];
     let mut frame_state_buffers = vec![];
@@ -495,7 +496,7 @@ struct App {
 }
 
 impl App {
-    fn step(&mut self, render: bool) {
+    fn step(&mut self, render: bool, write_render: bool) {
         let scene = &self.scene;
         let device = &scene.wctx.device;
         let queue = &scene.wctx.queue;
@@ -536,20 +537,20 @@ impl App {
             }
             command_encoder.pop_debug_group();
             queue.submit(Some(command_encoder.finish()));
-            device.poll(wgpu::Maintain::wait()).panic_on_timeout();
 
-            let mut img = vec![0u8; (FrameW*FrameH*4) as usize];
-            // read_frame_buffer(img.as_mut_slice(), scene, 0);
-            read_frame_buffer(img.as_mut_slice(), scene, (self.frame_cntr+1) % 2);
+            if write_render {
+                device.poll(wgpu::Maintain::wait()).panic_on_timeout();
 
-            {
-                // let fp = std::fs::File::open("/tmp/img.bin");
-                // let fp = std::fs::OpenOptions::new().write(true).open("/tmp/img.bin").unwrap();
-                use std::fs::File;
-                use std::io::Write;
-                let mut fp = std::fs::File::create("/tmp/img.bin").unwrap();
-                fp.write(img.as_slice()).ok();
-                println!("wrote '/tmp/img.bin'");
+                let mut img = vec![0u8; (FrameW*FrameH*4) as usize];
+                // read_frame_buffer(img.as_mut_slice(), scene, 0);
+                read_frame_buffer(img.as_mut_slice(), scene, (self.frame_cntr+1) % 2);
+
+                {
+                    use std::io::Write;
+                    let mut fp = std::fs::File::create("/tmp/img.bin").unwrap();
+                    fp.write(img.as_slice()).ok();
+                    println!("wrote '/tmp/img.bin'");
+                }
             }
         }
 
@@ -562,11 +563,17 @@ fn main() {
 
     let mut scene = go();
     let mut app = App { scene, frame_cntr: 0};
-    app.step(false);
-    app.step(false);
-    app.step(false);
+    app.step(false, false);
+    app.step(false,false);
+    app.step(false,false);
     // app.step(true);
-    app.step(true);
+    app.step(true,false);
+    app.step(true,false);
+    app.step(true,false);
+    app.step(true,false);
+    app.step(true,false);
+    app.step(true,false);
+    app.step(true,true);
 
     println!("Hello, world!");
 }
