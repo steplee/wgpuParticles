@@ -16,9 +16,9 @@ use render_to_screen::{RenderToScreen};
 use winit::{application::ApplicationHandler, dpi::LogicalSize, event::WindowEvent, event_loop::{ActiveEventLoop, ControlFlow, EventLoop}, window::{Window, WindowId}};
 
 // const MaxParticlesSqrt: u64 = 256;
-// const MaxParticlesSqrt: u64 = 256*1;
+const MaxParticlesSqrt: u64 = 256*1;
 // const MaxParticlesSqrt: u64 = 32*1;
-const MaxParticlesSqrt: u64 = 8*1;
+// const MaxParticlesSqrt: u64 = 8*1;
 const MaxParticles: u64 = MaxParticlesSqrt*MaxParticlesSqrt;
 const ParticlesPerGroup: u64 = 32;
 const FrameWorkGroupSize: u64 = 16;
@@ -373,7 +373,7 @@ fn go() -> Scene {
     let ini_frame = vec![0.0_f32; (npix * 4) as usize];
 
     // let ini_frame_state = vec![ini_frame_state; (npix * 4) as usize];
-    let ini_frame_state = (0..(npix as u32)).map(|i| FrameState { top: [0,0,0,0], rstate: i, _pad: [0,0,0] }).collect::<Vec<_>>();
+    let ini_frame_state = (0..(npix as u32)).map(|i| FrameState { top: [i%MaxParticles as u32,(i+1)%MaxParticles as u32,(i+2)%MaxParticles as u32,(i+3)%MaxParticles as u32], rstate: i, _pad: [0,0,0] }).collect::<Vec<_>>();
 
     let mut frame_buffers = vec![];
     let mut frame_state_buffers = vec![];

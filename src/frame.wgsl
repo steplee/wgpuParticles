@@ -122,6 +122,35 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 		Item (fstate0.top[3], length(particlesIn[fstate0.top[3]].p.xy - uv))
 	);
 
+	// De-duplicate
+	for (var ii = 0u; ii < 4u; ii += 1u) {
+		for (var jj = ii+1; jj < 4u; jj += 1u) {
+			if (items[ii].i == items[jj].i) {
+				items[jj].i = 0u;
+				items[jj].d = 999999.;
+			}
+		}
+	}
+	
+	// bubble sort
+	for (var ii = 0u; ii < 3u; ii += 1u) {
+		for (var jj = ii; jj < 3u; jj += 1u) {
+			let kk = jj + 1;
+			if (items[jj].d > items[kk].d) {
+				let tmp = items[jj];
+				items[jj] = items[kk];
+				items[kk] = tmp;
+			}
+		}
+	}
+
+	// Show duplicates.
+	for (var ii = 0u; ii < 1u; ii += 1u) {
+		for (var jj = ii+1; jj < 4u; jj += 1u) {
+			if (items[ii].i == items[jj].i) {color.b += 10.;}
+		}
+	}
+
 	let n_particles_to_sample = 50u;
 	let ddy = array<i32,4>(0,0,1,-1);
 	let ddx = array<i32,4>(1,-1,0,0);
@@ -143,11 +172,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 		}
 
 
-FIXME: This is not enough: must prune and sort every step
-		// skip if we already have.
-		for (var j = 0u; j < 4; j++) {
-			if (items[j].i == pi) {continue;}
-		}
+		// Prevent duplicate (is this necessary?)
+		for (var j = 0u; j < 4; j++) { if (items[j].i == pi) {continue;} }
 
 		let part = particlesIn[pi];
 
@@ -155,9 +181,11 @@ FIXME: This is not enough: must prune and sort every step
 
 		for (var j = 0u; j < 4; j++) {
 			let dj = items[j].d;
-			if (d < dj) {
-				for (var k = j+1; k < 4; k++) {
-					items[k] = items[k-1];
+			if (d <= dj) {
+				if (d < dj) {
+					for (var k = j+1; k < 4; k++) {
+						items[k] = items[k-1];
+					}
 				}
 				items[j] = Item(pi, d);
 				break;
@@ -173,18 +201,23 @@ FIXME: This is not enough: must prune and sort every step
 	}
 
 	{
-		let p1 = particlesIn[items[0].i];
+		let p0 = particlesIn[items[0].i];
+		let d0 = length(p0.p.xy - uv);
+		let p1 = particlesIn[items[1].i];
 		let d1 = length(p1.p.xy - uv);
-		let p2 = particlesIn[items[3].i];
+		let p2 = particlesIn[items[2].i];
 		let d2 = length(p2.p.xy - uv);
+		let p3 = particlesIn[items[3].i];
+		let d3 = length(p3.p.xy - uv);
 
 		// let ll = cross(vec3(p1.p.xy, 1.), vec3(p2.p.xy, 1.));
 		// let l = cross(ll, vec3(0.,0.,1.));
 		// let d = abs(dot(l, vec3(uv - p1.p.xy,0.))) * 2.;
 		// color += vec4f(d, d,d, d);
 
-		color += vec4f(1.,0.,0.,1.) * exp(-d1 * 100.);
-		color += vec4f(0.,1.,0.,1.) * exp(-d2 * 100.);
+		color += vec4f(1.,0.,0.,1.) * exp(-d0 * 6900.);
+		// color += vec4f(0.,1.,0.,1.) * exp(-d2 * 1050.);
+		// color += vec4f(0.,0.,1.,1.) * exp(-d3 * 100.);
 	}
 
 
