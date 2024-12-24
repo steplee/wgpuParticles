@@ -197,7 +197,15 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 	for (var j = 0u; j < 4; j++) {
 		let p = particlesIn[items[j].i];
 		let d = length(p.p.xy - uv);
-		color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * exp(-d*5650.) * .5;
+		// color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * exp(-d*5650.) * .0001;
+		// color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * exp(-d*650.) * .01;
+
+		let s0 = exp(-d*4550.) * 2.;
+		color += vec4f(vec3f(.5, 1., 1.) * s0, s0);
+
+		// let s = exp(-d*250.) * .5;
+		let s = .000002 / (.000001 + pow(d, 7.)) * (array<f32,4>(1.,.7,.5,.2))[j];
+		// color += vec4f(.1, .8*(1.-abs(cos(p.intensity))),abs(cos(p.intensity)), 1.) * vec4f(s,s,s,1.);
 	}
 
 	{
@@ -215,14 +223,47 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 		// let d = abs(dot(l, vec3(uv - p1.p.xy,0.))) * 2.;
 		// color += vec4f(d, d,d, d);
 
-		color += vec4f(1.,0.,0.,1.) * exp(-d0 * 6900.);
-		// color += vec4f(0.,1.,0.,1.) * exp(-d2 * 1050.);
+		// color += vec4f(1.,0.,0.,1.) * exp(-d3 * 1900.) * .0001;
+		// color += vec4f(0.,1.,0.,1.) * exp(-d2 * 1950.) * .00003;
 		// color += vec4f(0.,0.,1.,1.) * exp(-d3 * 100.);
 	}
 
+	// for (var j = 0u; j < 3; j++) {
+	for (var j = 0u; j < 3; j++) {
+	for (var k = j+1u; k < 4; k++) {
+	{
+		let pp0 = particlesIn[items[j].i].p;
+		let pp1 = particlesIn[items[k].i].p;
+
+		let ll = normalize(cross(vec3(pp0.xy, 1.), vec3(pp1.xy, 1.)));
+		let d = abs(dot(ll, vec3(uv - pp0.xy, 0.)));
+		var thresh = (1. - (f32(1 + j) * f32(1 + k)) / 25.) * .001;
+		let z = .5 + (pp0.z * pp1.z);
+		// let blur = 20.*abs(z);
+		let blur = distance(pp0,pp1) * 10.;
+		thresh *= blur + 1.;
+
+		// let thresh = .004;
+		if (d < thresh) {
+			let dir = normalize(pp1.xy - pp0.xy);
+			let t = dot(uv - pp0.xy, dir);
+			if t > 0. && t < 1. {
+			var s = 1. - (f32(1 + j) * f32(1 + k)) / 25. + .05;
+			s = s * smoothstep(thresh, 0., d);
+			// s *= 1. /blur;
+			s *= 1./(.5+blur);
+			color.g += s*2.;
+			color.b += s*abs(sin(pp0.z*10.));
+			color.a += 2.;
+			}
+		}
+	}
+	}}
+
 
 	color = vec4f(color.rgb/(.000001+color.a), color.a);
-	color += frameIn[py*fw+px] * .1;
+	// color += frameIn[py*fw+px] * .95;
+	color += frameIn[py*fw+px] * .85;
 
 	// frameOut[py*fw+px] = vec4f(sin(3.141*f32(px)),f32(py)*.001,0.,1.);
 	frameOut[py*fw+px] = color;

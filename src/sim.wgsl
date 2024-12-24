@@ -11,14 +11,25 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
 	var part = particlesIn[idx];
 
+	// let dt = .1;
+	var dt = .01;
+	dt *= 1.;
+
 	let p0 = part.p;
 	let v0 = part.v;
 
-	var a = get_random_acc(p0 * 15.5);
-	a += -v0 * .7; // drag
+	// var a = get_random_acc(p0 * 15.5);
+	// var a = get_random_acc(p0 * vec3(15.5, 15.5, 6.5));
 
-	// let dt = .1;
-	let dt = .01;
+	var a = get_random_acc(p0 * vec3(15.5, 15.5, 9.5));
+	// var a = get_random_acc(p0 * vec3((abs(p0.z)+abs(p0.y+1.)+1.)*15.5, (abs(p0.z)+abs(p0.y+1.)+1.)*15.5, .5));
+
+	// a = a*abs(a);
+
+	// a += -v0 * .97; // drag
+	a += -v0 * (.0097/dt); // drag
+
+
 
 	part.v = v0 + a * dt;
 	part.p = p0 + part.v * dt + a * .5 * dt * dt;

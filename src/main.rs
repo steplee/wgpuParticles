@@ -16,8 +16,8 @@ use render_to_screen::{RenderToScreen};
 use winit::{application::ApplicationHandler, dpi::LogicalSize, event::WindowEvent, event_loop::{ActiveEventLoop, ControlFlow, EventLoop}, window::{Window, WindowId}};
 
 // const MaxParticlesSqrt: u64 = 256;
-const MaxParticlesSqrt: u64 = 256*1;
-// const MaxParticlesSqrt: u64 = 32*1;
+// const MaxParticlesSqrt: u64 = 256*3;
+const MaxParticlesSqrt: u64 = 32*1;
 // const MaxParticlesSqrt: u64 = 8*1;
 const MaxParticles: u64 = MaxParticlesSqrt*MaxParticlesSqrt;
 const ParticlesPerGroup: u64 = 32;
